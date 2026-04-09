@@ -24,63 +24,48 @@ This project utilizes the standard benchmark **Chest X-Ray Images (Pneumonia)** 
 * **Task:** Binary Image Classification (Normal vs. Pneumonia)
 * **Source:** [Kaggle Chest X-Ray Dataset](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia)
 
-*Note: The dataset is excluded from version control via `.gitignore`. Please download it directly and place it in the root `/chest_xray/` directory before running the baseline training.*
+*Note: The dataset is excluded from version control. Please download it directly and place it in the root `/chest_xray/` directory before running the pipeline.*
 
 ## Repository Structure
 
 ```text
-├── baseline_training.ipynb          # Fine-tunes ResNet-50 on the Chest X-Ray dataset
+├── baseline_training.ipynb       # Fine-tunes ResNet-50 on the Chest X-Ray dataset
 ├── extract_explanations.py       # Hooks into the model via Captum to generate heatmaps
 ├── evaluate_faithfulness.py      # Calculates Deletion/Insertion AUC curves
 ├── evaluate_sanity_checks.py     # Executes cascading weight randomization tests
-├── resnet50_pneumonia_baseline.pth # Pre-trained baseline model weights (94% Acc)
+├── 3x3.png                       # Sanity check grid visualization
+├── curves.png                    # Faithfulness AUC curves visualization
 └── README.md
 ```
 
 ## Methodology
 
-### 1. Faithfulness Evaluation
+### 1\. Faithfulness Evaluation
+
 We measure whether the pixels highlighted by the explanation method actually drive the model's prediction.
-* **Deletion:** Iteratively mask the most "important" pixels to zero. A rapid drop in model confidence (Lower AUC) indicates high faithfulness.
-* **Insertion:** Start with a baseline (black) image and iteratively introduce the most "important" pixels. A rapid rise in confidence (Higher AUC) indicates high faithfulness.
 
-### 2. Sanity Checks (Cascading Randomization)
+  * **Deletion:** Iteratively mask the most "important" pixels to zero. A rapid drop in model confidence (Lower AUC) indicates high faithfulness.
+  * **Insertion:** Start with a baseline (black) image and iteratively introduce the most "important" pixels. A rapid rise in confidence (Higher AUC) indicates high faithfulness.
+
+### 2\. Sanity Checks (Cascading Randomization)
+
 We evaluate if the explanation methods are sensitive to the model's learned weights.
-* We systematically randomize the weights of the ResNet-50, starting from the Fully Connected (`fc`) classifier down to the final convolutional block (`layer4`).
-* If a saliency method produces the same heatmap for a randomized model as it does for a trained model, it fails the sanity check.
 
-## Usage & Reproduction
+  * We systematically randomize the weights of the ResNet-50, starting from the Fully Connected (`fc`) classifier down to the final convolutional block (`layer4`).
+  * If a saliency method produces the same heatmap for a randomized model as it does for a trained model, it fails the sanity check.
 
-**1. Clone the repository and navigate to the directory:**
-```bash
-git clone [https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git](https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git)
-cd xai-chest-xray-evaluation
-```
+## Visual Evidence & Results Summary
 
-**2. Install dependencies:**
-```bash
-pip install torch torchvision captum scikit-learn matplotlib numpy pillow
-```
+### Faithfulness Metrics (The Trap)
+![Deletion and Insertion AUC Curves](curves.png)
+*Integrated Gradients shows steeper degradation on deletion and faster rise on insertion, falsely suggesting it is the superior method.*
 
-**3. Execute the pipeline:**
-Ensure your `resnet50_pneumonia_baseline.pth` is in the root directory, or run `baseline_training.ipynb` to train from scratch.
+### Sanity Checks (The Reality)
+![Cascading Randomization Sanity Check Grid](3x3.png)
+*Notice how Integrated Gradients (middle column) remains practically unchanged even after the visual processing layers are completely randomized (bottom row), failing the sanity check.*
 
-To generate the comparative heatmaps:
-```bash
-python extract_explanations.py
-```
 
-To calculate the Deletion and Insertion AUC metrics:
-```bash
-python evaluate_faithfulness.py
-```
-
-To run the Cascading Randomization grid:
-```bash
-python evaluate_sanity_checks.py
-```
-
-## Results Summary
+### Quantitative Verdict
 
 | Metric | Integrated Gradients | Grad-CAM |
 | :--- | :--- | :--- |
@@ -88,6 +73,38 @@ python evaluate_sanity_checks.py
 | **Insertion AUC (Higher = Better)** | **0.778** | 0.585 |
 | **Sanity Check (Model Randomization)** | **FAIL** (Acts as edge detector) | **PASS** (Reflects learned weights) |
 
-***
-*Developed for research and evaluation in Deep Learning architectures.*
+## Usage & Reproduction
+
+**1. Clone the repository and navigate to the directory:**
+
+```bash
+git clone [https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git](https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git)
+cd xai-chest-xray-evaluation
 ```
+
+**2. Install dependencies:**
+
+```bash
+pip install torch torchvision captum scikit-learn matplotlib numpy pillow
+```
+
+**3. Execute the pipeline:**
+To fully reproduce this study, first generate the base model weights by running the training notebook, then execute the evaluation scripts.
+
+```bash
+# 1. Train the model (generates the .pth weight file)
+# Run baseline_training.ipynb in Jupyter/Colab
+
+# 2. Generate the comparative heatmaps
+python extract_explanations.py
+
+# 3. Calculate the Deletion and Insertion AUC metrics
+python evaluate_faithfulness.py
+
+# 4. Run the Cascading Randomization grid
+python evaluate_sanity_checks.py
+```
+
+-----
+
+*Developed for research and evaluation in Deep Learning architectures.*
