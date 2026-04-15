@@ -1,110 +1,77 @@
 # CNN Saliency Evaluation: Faithfulness vs. Sanity in Medical Imaging
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg)
-![Captum](https://img.shields.io/badge/Captum-Interpretability-brightgreen.svg)
-![Status](https://img.shields.io/badge/Status-Complete-success.svg)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-Stable-EE4C2C?logo=pytorch)
+![Captum](https://img.shields.io/badge/Captum-Interpretability-orange)
+![Status](https://img.shields.io/badge/Status-Complete-success)
 
-## Project Overview
+This repository contains the official code, evaluation scripts, and failure analysis for our research on the reliability of Explainable AI (XAI) in medical imaging. 
 
-Visual heatmaps in Explainable AI (XAI) can be dangerously misleading, especially in safety-critical domains like medical imaging. This repository contains a rigorous, reproducible experimental pipeline that evaluates the true robustness of popular CNN saliency methods (Grad-CAM and Integrated Gradients). 
+We evaluate the trustworthiness of **Integrated Gradients (IG), Grad-CAM, and LIME** using a ResNet-50 model trained to detect pneumonia from chest X-rays. Instead of relying on subjective visual inspection, we subject these methods to rigorous mathematical stress tests to prove that **visual appeal does not equal algorithmic reliability.**
 
-Instead of relying on qualitative visual inspections, this study stress-tests a **ResNet-50** model trained on Chest X-Rays (Normal vs. Pneumonia) using strict quantitative evaluation protocols: **Faithfulness Metrics** (Deletion/Insertion AUC) and **Sanity Checks** (Cascading Parameter Randomization).
+---
 
-## Key Findings & Contributions
+## 🔬 Core Findings & Visual Evidence
 
-Our empirical evaluation revealed a critical, counter-intuitive discrepancy:
-* **The Faithfulness Trap:** Integrated Gradients drastically outperformed Grad-CAM on pixel-level faithfulness metrics, making it appear superior.
-* **The Sanity Check Failure:** Despite high faithfulness scores, Integrated Gradients completely failed the cascading randomization test. It continued to produce coherent lung outlines even after the model's visual processing layers were randomized, indicating it degraded into a simple edge-detector.
-* **Robustness of Grad-CAM:** Grad-CAM produced coarser heatmaps and lower AUC scores, but successfully collapsed into noise during randomization, proving it honestly reflects the actual learned features of the CNN.
+Our research exposes a critical vulnerability in current XAI applications: methods that achieve high pixel-level faithfulness can still completely fail parameter sanity checks.
 
-## Dataset
+### 1. The Extreme Sanity Check (Data Randomization)
+We simulated a completely ignorant model by scrambling the training labels. A reliable XAI method should output meaningless noise when the model has learned nothing.
+* **Grad-CAM** correctly collapses into disorganized heatmaps.
+* **Integrated Gradients** acts as an ignorant edge-detector, continuing to perfectly outline the lungs despite the model's lack of diagnostic intelligence.
 
-This project utilizes the standard benchmark **Chest X-Ray Images (Pneumonia)** dataset. 
-* **Task:** Binary Image Classification (Normal vs. Pneumonia)
-* **Source:** [Kaggle Chest X-Ray Dataset](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia)
+![Label Randomization Check](label_randomization_check.png)
+*> Figure 1: Explanations extracted from a ResNet-50 model trained to convergence on completely scrambled labels.*
 
-*Note: The dataset is excluded from version control. Please download it directly and place it in the root `/chest_xray/` directory before running the pipeline.*
+### 2. Robustness to Input Perturbations
+We injected an imperceptible **10% Gaussian noise** into the X-ray to simulate sensor static. All methods exhibited severe mathematical fragility. Grad-CAM, despite passing sanity checks, entirely inverted its focus (Cosine Similarity: -0.140).
 
-## Repository Structure
+![Robustness Comparison](robustness_comparison.png)
+*> Figure 2: Visual comparison of explanation robustness against 10% Gaussian sensor noise.*
+
+---
+
+## ⚙️ Quick Start & Reproducibility
+
+This repository is designed to be easily reproducible. All metrics, heatmaps, and evaluations from the paper can be generated using the provided scripts.
+
+### Installation
+Ensure you have Python 3.8+ installed, then clone this repository and install the dependencies:
+```bash
+git clone [https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation](https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation)
+cd xai-chest-xray-evaluation
+pip install torch torchvision captum matplotlib numpy Pillow
+```
+
+### Execution Scripts
+Run the following scripts to reproduce the specific evaluations discussed in the paper:
+
+**1. LIME Faithfulness Evaluation** Estimates the Deletion and Insertion AUC metrics using superpixel perturbation.
+```bash
+python lime_faithfulness.py
+```
+
+**2. Robustness Analysis** Injects Gaussian noise and calculates the Cosine Similarity between clean and noisy 1D flattened attribution arrays.
+```bash
+python evaluate_robustness.py
+```
+
+**3. Dataset Label Randomization** Trains a baseline model on scrambled labels to execute the extreme sanity check.
+```bash
+python label_randomization.py
+```
+
+---
+
+## 📂 Repository Structure
 
 ```text
-├── baseline_training.ipynb       # Fine-tunes ResNet-50 on the Chest X-Ray dataset
-├── extract_explanations.py       # Hooks into the model via Captum to generate heatmaps
-├── evaluate_faithfulness.py      # Calculates Deletion/Insertion AUC curves
-├── evaluate_sanity_checks.py     # Executes cascading weight randomization tests
-├── 3x3.png                       # Sanity check grid visualization
-├── curves.png                    # Faithfulness AUC curves visualization
-└── README.md
+├── chest_xray/                 # Kaggle dataset (Not included, download separately)
+├── resnet50_pneumonia_baseline.pth # Pre-trained accurate baseline model
+├── evaluate_robustness.py      # Script for noise injection & cosine similarity
+├── label_randomization.py      # Script for extreme sanity check training
+├── lime_faithfulness.py        # Script for LIME pixel-level AUC metrics
+├── robustness_comparison.png   # Generated output: Robustness grid
+├── label_randomization_check.png # Generated output: Sanity check grid
+└── README.md                   # Project documentation
 ```
-
-## Methodology
-
-### 1\. Faithfulness Evaluation
-
-We measure whether the pixels highlighted by the explanation method actually drive the model's prediction.
-
-  * **Deletion:** Iteratively mask the most "important" pixels to zero. A rapid drop in model confidence (Lower AUC) indicates high faithfulness.
-  * **Insertion:** Start with a baseline (black) image and iteratively introduce the most "important" pixels. A rapid rise in confidence (Higher AUC) indicates high faithfulness.
-
-### 2\. Sanity Checks (Cascading Randomization)
-
-We evaluate if the explanation methods are sensitive to the model's learned weights.
-
-  * We systematically randomize the weights of the ResNet-50, starting from the Fully Connected (`fc`) classifier down to the final convolutional block (`layer4`).
-  * If a saliency method produces the same heatmap for a randomized model as it does for a trained model, it fails the sanity check.
-
-## Visual Evidence & Results Summary
-
-### Faithfulness Metrics (The Trap)
-![Deletion and Insertion AUC Curves](curves.png)
-*Integrated Gradients shows steeper degradation on deletion and faster rise on insertion, falsely suggesting it is the superior method.*
-
-### Sanity Checks (The Reality)
-![Cascading Randomization Sanity Check Grid](3x3.png)
-*Notice how Integrated Gradients (middle column) remains practically unchanged even after the visual processing layers are completely randomized (bottom row), failing the sanity check.*
-
-
-### Quantitative Verdict
-
-| Metric | Integrated Gradients | Grad-CAM |
-| :--- | :--- | :--- |
-| **Deletion AUC (Lower = Better)** | **0.052** | 0.125 |
-| **Insertion AUC (Higher = Better)** | **0.778** | 0.585 |
-| **Sanity Check (Model Randomization)** | **FAIL** (Acts as edge detector) | **PASS** (Reflects learned weights) |
-
-## Usage & Reproduction
-
-**1. Clone the repository and navigate to the directory:**
-
-```bash
-git clone [https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git](https://github.com/GurdarshanSingh78/xai-chest-xray-evaluation.git)
-cd xai-chest-xray-evaluation
-```
-
-**2. Install dependencies:**
-
-```bash
-pip install torch torchvision captum scikit-learn matplotlib numpy pillow
-```
-
-**3. Execute the pipeline:**
-To fully reproduce this study, first generate the base model weights by running the training notebook, then execute the evaluation scripts.
-
-```bash
-# 1. Train the model (generates the .pth weight file)
-# Run baseline_training.ipynb in Jupyter/Colab
-
-# 2. Generate the comparative heatmaps
-python extract_explanations.py
-
-# 3. Calculate the Deletion and Insertion AUC metrics
-python evaluate_faithfulness.py
-
-# 4. Run the Cascading Randomization grid
-python evaluate_sanity_checks.py
-```
-
------
-
-*Developed for research and evaluation in Deep Learning architectures.*
